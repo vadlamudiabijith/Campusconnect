@@ -21,6 +21,8 @@ import { Payments } from './pages/Payments';
 import { Admin } from './pages/Admin';
 import { Profile } from './pages/Profile';
 import { ParentPortal } from './pages/ParentPortal';
+import { ExamPortal } from './pages/ExamPortal';
+import { SecurityDashboard } from './pages/SecurityDashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -62,6 +64,8 @@ const AppRoutes: React.FC = () => (
       <Route path="admin" element={<Admin />} />
       <Route path="profile" element={<Profile />} />
       <Route path="parent" element={<ParentPortal />} />
+      <Route path="exams" element={<ExamPortal />} />
+      <Route path="security" element={<SecurityDashboard />} />
     </Route>
     <Route path="*" element={<Navigate to="/dashboard" replace />} />
   </Routes>
@@ -84,12 +88,8 @@ function App() {
                 fontSize: '14px',
                 backdropFilter: 'blur(12px)',
               },
-              success: {
-                iconTheme: { primary: '#10B981', secondary: '#fff' },
-              },
-              error: {
-                iconTheme: { primary: '#EF4444', secondary: '#fff' },
-              },
+              success: { iconTheme: { primary: '#10B981', secondary: '#fff' } },
+              error: { iconTheme: { primary: '#EF4444', secondary: '#fff' } },
             }}
           />
         </BrowserRouter>

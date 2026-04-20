@@ -5,7 +5,7 @@ import {
   LayoutDashboard, BookOpen, AlertCircle, Users, Calendar,
   Clock, CheckSquare, MessageSquare, CreditCard, Shield,
   BarChart3, LogOut, ChevronLeft, ChevronRight,
-  GraduationCap
+  GraduationCap, FileText, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar } from '../ui/Avatar';
@@ -18,15 +18,17 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard', roles: ['student', 'faculty', 'admin', 'security', 'visitor'] },
+  { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard', roles: ['student', 'faculty', 'admin', 'security', 'visitor', 'parent'] },
   { to: '/courses', icon: <BookOpen size={18} />, label: 'Course Hub', roles: ['student', 'faculty', 'admin'] },
   { to: '/timetable', icon: <Clock size={18} />, label: 'Timetable', roles: ['student', 'faculty', 'admin'] },
   { to: '/attendance', icon: <CheckSquare size={18} />, label: 'Attendance', roles: ['student', 'faculty', 'admin'] },
+  { to: '/exams', icon: <FileText size={18} />, label: 'Exam Portal', roles: ['student'] },
   { to: '/issues', icon: <AlertCircle size={18} />, label: 'Issues', roles: ['student', 'faculty', 'admin', 'security'] },
   { to: '/clubs', icon: <Users size={18} />, label: 'Clubs', roles: ['student', 'faculty', 'admin'] },
   { to: '/events', icon: <Calendar size={18} />, label: 'Events', roles: ['student', 'faculty', 'admin'] },
   { to: '/payments', icon: <CreditCard size={18} />, label: 'Payments', roles: ['student', 'faculty', 'admin'] },
   { to: '/visitors', icon: <Shield size={18} />, label: 'Visitors', roles: ['security', 'admin', 'faculty'] },
+  { to: '/security', icon: <ShieldCheck size={18} />, label: 'Security', roles: ['security', 'admin'] },
   { to: '/feedback', icon: <MessageSquare size={18} />, label: 'Feedback', roles: ['student', 'faculty', 'admin'] },
   { to: '/parent', icon: <GraduationCap size={18} />, label: 'Parent Portal', roles: ['parent'] },
   { to: '/admin', icon: <BarChart3 size={18} />, label: 'Admin Panel', roles: ['admin'] },
@@ -100,6 +102,7 @@ export const Sidebar: React.FC = () => {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
                       className="relative z-10 text-sm font-medium whitespace-nowrap"
                     >
                       {item.label}
