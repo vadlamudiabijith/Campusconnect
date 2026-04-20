@@ -27,9 +27,19 @@ export const Attendance: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
+    const isFacultyOrAdmin = profile!.role === 'faculty' || profile!.role === 'admin';
+    let attQuery = supabase
+      .from('attendance')
+      .select('*, course:course_id(name, code, color), student:student_id(name)')
+      .order('date', { ascending: false })
+      .limit(200);
+
+    if (!isFacultyOrAdmin) {
+      attQuery = attQuery.eq('student_id', profile!.id);
+    }
+
     const [attRes, coursesRes] = await Promise.all([
-      supabase.from('attendance').select('*, course:course_id(name, code, color)')
-        .eq('student_id', profile!.id).order('date', { ascending: false }).limit(100),
+      attQuery,
       supabase.from('courses').select('*'),
     ]);
     if (attRes.data) setAttendance(attRes.data);
@@ -103,10 +113,10 @@ export const Attendance: React.FC = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Classes', value: attendance.length, color: 'blue' },
-          { label: 'Present', value: attendance.filter(a => a.status === 'present').length, color: 'emerald' },
-          { label: 'Late', value: attendance.filter(a => a.status === 'late').length, color: 'amber' },
-          { label: 'Absent', value: attendance.filter(a => a.status === 'absent').length, color: 'rose' },
+          { label: 'Total Classes', value: filteredAttendance.length, color: 'blue' },
+          { label: 'Present', value: filteredAttendance.filter(a => a.status === 'present').length, color: 'emerald' },
+          { label: 'Late', value: filteredAttendance.filter(a => a.status === 'late').length, color: 'amber' },
+          { label: 'Absent', value: filteredAttendance.filter(a => a.status === 'absent').length, color: 'rose' },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <Card className="p-4 text-center">
@@ -161,6 +171,9 @@ export const Attendance: React.FC = () => {
                     : <X size={16} className="text-red-500" />}
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">{formatDate(a.date)}</span>
                   <span className="text-xs text-zinc-400">{(a as any).course?.code}</span>
+                  {canMark && (a as any).student?.name && (
+                    <span className="text-xs text-zinc-500">{(a as any).student.name}</span>
+                  )}
                 </div>
                 <Badge variant={a.status === 'present' ? 'success' : a.status === 'late' ? 'warning' : 'danger'}>
                   {a.status}
