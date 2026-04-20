@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Megaphone, Calendar, Users, MessageSquare, UserPlus, UserCheck, CheckSquare } from 'lucide-react';
+import { ArrowLeft, Megaphone, Calendar, Users, MessageSquare, UserPlus, UserCheck, CheckSquare, Trophy, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,16 +13,20 @@ import { ClubEvents } from './tabs/ClubEvents';
 import { ClubMembers } from './tabs/ClubMembers';
 import { ClubChat } from './tabs/ClubChat';
 import { ClubAttendance } from './tabs/ClubAttendance';
+import { ClubPrizePool } from './tabs/ClubPrizePool';
+import { ClubDetails } from './tabs/ClubDetails';
 import type { Club } from '../../types';
 
-type Tab = 'announcements' | 'events' | 'members' | 'chat' | 'attendance';
+type Tab = 'announcements' | 'events' | 'members' | 'chat' | 'attendance' | 'prizes' | 'details';
 
 const tabs = [
   { id: 'announcements' as Tab, label: 'Announcements', icon: <Megaphone size={15} /> },
   { id: 'events' as Tab, label: 'Events', icon: <Calendar size={15} /> },
   { id: 'attendance' as Tab, label: 'Attendance', icon: <CheckSquare size={15} /> },
+  { id: 'prizes' as Tab, label: 'Prize Pool', icon: <Trophy size={15} /> },
   { id: 'members' as Tab, label: 'Members', icon: <Users size={15} /> },
   { id: 'chat' as Tab, label: 'Chat', icon: <MessageSquare size={15} /> },
+  { id: 'details' as Tab, label: 'Details', icon: <Info size={15} /> },
 ];
 
 const categoryGradients: Record<string, string> = {
@@ -142,8 +146,8 @@ export const ClubDetail: React.FC = () => {
           </div>
         </div>
 
-        <div className="relative px-6 border-t border-white/10 bg-black/10 backdrop-blur-sm">
-          <div className="flex gap-0">
+        <div className="relative px-6 border-t border-white/10 bg-black/10 backdrop-blur-sm overflow-x-auto">
+          <div className="flex gap-0 min-w-max">
             {tabs.map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
@@ -164,8 +168,10 @@ export const ClubDetail: React.FC = () => {
             {activeTab === 'announcements' && <ClubAnnouncements clubId={id!} isMember={isMember} memberRole={memberRole} />}
             {activeTab === 'events' && <ClubEvents clubId={id!} clubName={club.name} isMember={isMember} />}
             {activeTab === 'attendance' && <ClubAttendance clubId={id!} isMember={isMember} memberRole={memberRole || ''} />}
+            {activeTab === 'prizes' && <ClubPrizePool clubId={id!} isMember={isMember} memberRole={memberRole || ''} />}
             {activeTab === 'members' && <ClubMembers clubId={id!} />}
             {activeTab === 'chat' && <ClubChat clubId={id!} clubName={club.name} isMember={isMember} />}
+            {activeTab === 'details' && <ClubDetails clubId={id!} memberRole={memberRole || ''} />}
           </motion.div>
         </AnimatePresence>
       </div>

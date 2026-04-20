@@ -302,9 +302,9 @@ const FacultyExamPortal: React.FC = () => {
   useEffect(() => { if (profile) loadCourses(); }, [profile]);
 
   const loadCourses = async () => {
-    const { data } = await supabase.from('courses')
-      .select('id, name, code, color, credits, semester')
-      .eq('faculty_id', profile!.id);
+    const isAdmin = profile!.role === 'admin';
+    const query = supabase.from('courses').select('id, name, code, color, credits, semester');
+    const { data } = isAdmin ? await query : await query.eq('faculty_id', profile!.id);
     if (data) { setCourses(data); if (data.length > 0) selectCourse(data[0]); }
     setLoading(false);
   };
