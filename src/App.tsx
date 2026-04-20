@@ -23,6 +23,7 @@ import { Profile } from './pages/Profile';
 import { ParentPortal } from './pages/ParentPortal';
 import { ExamPortal } from './pages/ExamPortal';
 import { SecurityDashboard } from './pages/SecurityDashboard';
+import { EventDetail } from './pages/EventDetail';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ const AppRoutes: React.FC = () => (
       <Route path="clubs" element={<Clubs />} />
       <Route path="clubs/:id" element={<ClubDetail />} />
       <Route path="events" element={<Events />} />
+      <Route path="events/:id" element={<EventDetail />} />
       <Route path="timetable" element={<Timetable />} />
       <Route path="attendance" element={<Attendance />} />
       <Route path="feedback" element={<Feedback />} />

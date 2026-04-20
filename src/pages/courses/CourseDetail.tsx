@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Megaphone, FileText, FolderOpen, MessageSquare, BarChart2, Lock, LogIn, LogOut, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Megaphone, FileText, FolderOpen, MessageSquare, BarChart2, Lock, LogIn, LogOut, Users } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,18 +13,10 @@ import { CourseMaterials } from './tabs/CourseMaterials';
 import { CourseChat } from './tabs/CourseChat';
 import { CoursePerformance } from './tabs/CoursePerformance';
 import { CoursePrivateChat } from './tabs/CoursePrivateChat';
+import { CourseStudents } from './tabs/CourseStudents';
 import type { Course } from '../../types';
 
-type Tab = 'announcements' | 'assignments' | 'materials' | 'chat' | 'performance' | 'private';
-
-const tabs = [
-  { id: 'announcements' as Tab, label: 'Announcements', icon: <Megaphone size={16} /> },
-  { id: 'assignments' as Tab, label: 'Assignments', icon: <FileText size={16} /> },
-  { id: 'materials' as Tab, label: 'Materials', icon: <FolderOpen size={16} /> },
-  { id: 'chat' as Tab, label: 'Class Chat', icon: <MessageSquare size={16} /> },
-  { id: 'private' as Tab, label: 'Ask Faculty', icon: <Lock size={16} /> },
-  { id: 'performance' as Tab, label: 'Performance', icon: <BarChart2 size={16} /> },
-];
+type Tab = 'announcements' | 'assignments' | 'materials' | 'chat' | 'performance' | 'private' | 'students';
 
 export const CourseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,15 +27,16 @@ export const CourseDetail: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('announcements');
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
+  const [privateTarget, setPrivateTarget] = useState<{ id: string; name: string } | null>(null);
 
   const isStudent = profile?.role === 'student';
-  const canViewAll = profile?.role === 'faculty' || profile?.role === 'admin';
+  const isFaculty = profile?.role === 'faculty' || profile?.role === 'admin';
 
   useEffect(() => {
     if (!id) return;
     const load = async () => {
       const [courseRes, enrollRes] = await Promise.all([
-        supabase.from('courses').select('*, faculty:faculty_id(name, email, department)').eq('id', id).maybeSingle(),
+        supabase.from('courses').select('*, faculty:faculty_id(id, name, email, department)').eq('id', id).maybeSingle(),
         isStudent && profile
           ? supabase.from('course_enrollments').select('course_id').eq('course_id', id).eq('student_id', profile.id).maybeSingle()
           : Promise.resolve({ data: null }),
@@ -75,6 +68,11 @@ export const CourseDetail: React.FC = () => {
     toast.success('Unenrolled from course');
   };
 
+  const handleMessageStudent = (student: { id: string; name: string }) => {
+    setPrivateTarget(student);
+    setActiveTab('private');
+  };
+
   if (loading) return (
     <div className="p-6 space-y-4">
       <Skeleton className="h-40 rounded-2xl" />
@@ -83,11 +81,21 @@ export const CourseDetail: React.FC = () => {
     </div>
   );
 
-  if (!course) return (
-    <div className="p-6 text-center text-zinc-500">Course not found</div>
-  );
+  if (!course) return <div className="p-6 text-center text-zinc-500">Course not found</div>;
 
-  const showContent = canViewAll || enrolled;
+  const showContent = isFaculty || enrolled;
+
+  const tabs: { id: Tab; label: string; icon: React.ReactNode; facultyOnly?: boolean }[] = [
+    { id: 'announcements', label: 'Announcements', icon: <Megaphone size={15} /> },
+    { id: 'assignments', label: 'Assignments', icon: <FileText size={15} /> },
+    { id: 'materials', label: 'Materials', icon: <FolderOpen size={15} /> },
+    { id: 'chat', label: 'Class Chat', icon: <MessageSquare size={15} /> },
+    { id: 'private', label: 'Ask Faculty', icon: <Lock size={15} /> },
+    { id: 'performance', label: 'Performance', icon: <BarChart2 size={15} /> },
+    { id: 'students', label: 'Students', icon: <Users size={15} />, facultyOnly: true },
+  ];
+
+  const visibleTabs = tabs.filter(t => !t.facultyOnly || isFaculty);
 
   return (
     <div className="flex flex-col h-full">
@@ -122,20 +130,14 @@ export const CourseDetail: React.FC = () => {
             </div>
             {isStudent && (
               enrolled ? (
-                <button
-                  onClick={handleUnenroll}
-                  disabled={enrolling}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 flex-shrink-0"
-                >
+                <button onClick={handleUnenroll} disabled={enrolling}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 flex-shrink-0">
                   <LogOut size={15} />
                   {enrolling ? 'Leaving...' : 'Unenroll'}
                 </button>
               ) : (
-                <button
-                  onClick={handleEnroll}
-                  disabled={enrolling}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0"
-                >
+                <button onClick={handleEnroll} disabled={enrolling}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0">
                   <LogIn size={15} />
                   {enrolling ? 'Enrolling...' : 'Enroll Now'}
                 </button>
@@ -145,11 +147,11 @@ export const CourseDetail: React.FC = () => {
         </div>
 
         {showContent && (
-          <div className="px-6 border-b border-zinc-200 dark:border-zinc-800/50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm">
-            <div className="flex gap-0">
-              {tabs.map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-all ${activeTab === tab.id
+          <div className="px-6 border-b border-zinc-200 dark:border-zinc-800/50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm overflow-x-auto">
+            <div className="flex gap-0 min-w-max">
+              {visibleTabs.map(tab => (
+                <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id !== 'private') setPrivateTarget(null); }}
+                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${activeTab === tab.id
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
                   {tab.icon}
@@ -169,18 +171,24 @@ export const CourseDetail: React.FC = () => {
               {activeTab === 'assignments' && <CourseAssignments courseId={id!} />}
               {activeTab === 'materials' && <CourseMaterials courseId={id!} />}
               {activeTab === 'chat' && <CourseChat courseId={id!} />}
-              {activeTab === 'private' && <CoursePrivateChat courseId={id!} facultyId={(course as any).faculty_id || ''} facultyName={(course as any).faculty?.name || 'Faculty'} />}
+              {activeTab === 'private' && (
+                <CoursePrivateChat
+                  courseId={id!}
+                  facultyId={(course as any).faculty?.id || (course as any).faculty_id || ''}
+                  facultyName={(course as any).faculty?.name || 'Faculty'}
+                  initialStudent={privateTarget}
+                />
+              )}
               {activeTab === 'performance' && <CoursePerformance courseId={id!} />}
+              {activeTab === 'students' && isFaculty && (
+                <CourseStudents courseId={id!} onMessageStudent={handleMessageStudent} />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center p-12">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center max-w-md"
-          >
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white font-bold text-3xl shadow-xl"
               style={{ backgroundColor: course.color || '#3B82F6' }}>
               {course.code?.substring(0, 2)}
@@ -198,13 +206,7 @@ export const CourseDetail: React.FC = () => {
               </div>
               <p className="text-xs text-zinc-400">Enroll to view announcements, assignments, materials, class chat, and your performance.</p>
             </div>
-            <Button
-              onClick={handleEnroll}
-              loading={enrolling}
-              icon={<LogIn size={16} />}
-              size="lg"
-              className="w-full"
-            >
+            <Button onClick={handleEnroll} loading={enrolling} icon={<LogIn size={16} />} size="lg" className="w-full">
               Enroll in {course.name}
             </Button>
           </motion.div>

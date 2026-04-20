@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Calendar, MapPin, Users, Plus, Search, Clock, Tag, CheckCircle2 } from 'lucide-react';
+import { Calendar, MapPin, Users, Plus, Search, Clock, CheckCircle2, ArrowRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,13 +19,13 @@ const categories = ['Academic', 'Cultural', 'Sports', 'Tech', 'Workshop', 'Socia
 
 export const Events: React.FC = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
   const [registrations, setRegistrations] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
-  const [selected, setSelected] = useState<Event | null>(null);
   const [saving, setSaving] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [form, setForm] = useState({
@@ -159,7 +160,7 @@ export const Events: React.FC = () => {
                       <div className="flex items-center gap-2 text-xs text-zinc-500"><Users size={12} /> {event.registered_count} registered</div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => setSelected(event)}>Details</Button>
+                      <Button size="sm" variant="ghost" icon={<ArrowRight size={13} />} onClick={() => navigate(`/events/${event.id}`)}>Details</Button>
                       <Button size="sm" variant={isReg ? 'outline' : 'primary'} className="flex-1"
                         loading={registering} onClick={() => register(event)}>
                         {isReg ? 'Unregister' : 'Register'}
@@ -201,24 +202,6 @@ export const Events: React.FC = () => {
         </form>
       </Modal>
 
-      {selected && (
-        <Modal isOpen={true} onClose={() => setSelected(null)} title={selected.title} size="lg">
-          <div className="space-y-4">
-            {selected.banner_url && <img src={selected.banner_url} className="w-full h-48 object-cover rounded-xl" alt="" />}
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{selected.description}</p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-zinc-400">Date:</span><br /><strong className="text-zinc-900 dark:text-white">{formatDate(selected.start_date)}</strong></div>
-              <div><span className="text-zinc-400">Time:</span><br /><strong className="text-zinc-900 dark:text-white">{formatTime(selected.start_date)}</strong></div>
-              <div><span className="text-zinc-400">Location:</span><br /><strong className="text-zinc-900 dark:text-white">{selected.location || 'TBD'}</strong></div>
-              <div><span className="text-zinc-400">Entry:</span><br /><strong className="text-zinc-900 dark:text-white">{selected.is_paid ? `RM${selected.fee}` : 'Free'}</strong></div>
-            </div>
-            <Button className="w-full" variant={registrations.has(selected.id) ? 'outline' : 'primary'}
-              onClick={() => register(selected)} loading={registering}>
-              {registrations.has(selected.id) ? 'Unregister' : 'Register Now'}
-            </Button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckCircle2, Clock, AlertCircle, FileText, Award, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, CheckCircle2, Clock, AlertCircle, FileText, Award, ChevronDown, ChevronUp, ExternalLink, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -20,6 +20,8 @@ interface Submission {
   status: string;
   marks?: number;
   notes?: string;
+  feedback?: string;
+  submission_url?: string;
   submitted_at?: string;
   student?: { name: string; student_id: string };
 }
@@ -32,11 +34,16 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', due_date: '', max_marks: '100', type: 'assignment' });
 
+  // Student submit modal
+  const [submitTarget, setSubmitTarget] = useState<Assignment | null>(null);
+  const [submitUrl, setSubmitUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   // Grading state (faculty)
   const [gradingAssignment, setGradingAssignment] = useState<Assignment | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
-  const [gradeInputs, setGradeInputs] = useState<Record<string, { marks: string; notes: string }>>({});
+  const [gradeInputs, setGradeInputs] = useState<Record<string, { marks: string; feedback: string }>>({});
   const [savingGrades, setSavingGrades] = useState<Record<string, boolean>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -44,17 +51,13 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
   const canCreate = profile?.role === 'faculty' || profile?.role === 'admin';
 
   const load = async () => {
-    const query = isStudent
-      ? supabase.from('assignments')
-          .select('*, submission:assignment_submissions(id,status,marks,notes,submitted_at)')
-          .eq('course_id', courseId)
-          .order('due_date')
-      : supabase.from('assignments')
-          .select('*')
-          .eq('course_id', courseId)
-          .order('due_date');
+    const { data } = isStudent
+      ? await supabase.from('assignments')
+          .select('*, submission:assignment_submissions(id,status,marks,notes,feedback,submission_url,submitted_at)')
+          .eq('course_id', courseId).order('due_date')
+      : await supabase.from('assignments')
+          .select('*').eq('course_id', courseId).order('due_date');
 
-    const { data } = await query;
     if (data) {
       setAssignments(data.map((a: any) => ({
         ...a,
@@ -81,17 +84,28 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
     load();
   };
 
-  const markComplete = async (assignmentId: string) => {
-    if (!profile) return;
-    await supabase.from('assignment_submissions').upsert({
-      assignment_id: assignmentId, student_id: profile.id, status: 'submitted', submitted_at: new Date().toISOString(),
-    });
-    toast.success('Marked as submitted!');
+  const handleStudentSubmit = async () => {
+    if (!profile || !submitTarget) return;
+    if (!submitUrl.trim()) { toast.error('Please provide a document link'); return; }
+    setSubmitting(true);
+    const { error } = await supabase.from('assignment_submissions').upsert({
+      assignment_id: submitTarget.id,
+      student_id: profile.id,
+      status: 'submitted',
+      submission_url: submitUrl.trim(),
+      submitted_at: new Date().toISOString(),
+    }, { onConflict: 'assignment_id,student_id' });
+    setSubmitting(false);
+    if (error) { toast.error('Failed to submit'); return; }
+    toast.success('Assignment submitted!');
+    setSubmitTarget(null);
+    setSubmitUrl('');
     load();
   };
 
   const openGrading = async (assignment: Assignment) => {
     setGradingAssignment(assignment);
+    setExpandedId(assignment.id);
     setLoadingSubmissions(true);
     const { data } = await supabase
       .from('assignment_submissions')
@@ -99,9 +113,9 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
       .eq('assignment_id', assignment.id);
     if (data) {
       setSubmissions(data);
-      const inputs: Record<string, { marks: string; notes: string }> = {};
+      const inputs: Record<string, { marks: string; feedback: string }> = {};
       data.forEach((s: Submission) => {
-        inputs[s.student_id] = { marks: s.marks?.toString() ?? '', notes: s.notes ?? '' };
+        inputs[s.student_id] = { marks: s.marks?.toString() ?? '', feedback: s.feedback ?? '' };
       });
       setGradeInputs(inputs);
     }
@@ -116,13 +130,10 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
     if (marksNum > gradingAssignment.max_marks) { toast.error(`Max marks is ${gradingAssignment.max_marks}`); return; }
 
     setSavingGrades(s => ({ ...s, [submission.student_id]: true }));
-
-    // Update submission
     await supabase.from('assignment_submissions')
-      .update({ marks: marksNum, notes: input.notes, status: 'graded' })
+      .update({ marks: marksNum, feedback: input.feedback, status: 'graded' })
       .eq('id', submission.id);
 
-    // Upsert grade record
     const pct = (marksNum / gradingAssignment.max_marks) * 100;
     const gp = pct >= 90 ? 10 : pct >= 80 ? 9 : pct >= 70 ? 8 : pct >= 60 ? 7 : pct >= 50 ? 6 : pct >= 40 ? 5 : 0;
     await supabase.from('grades').upsert({
@@ -132,19 +143,20 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
       marks: marksNum,
       max_marks: gradingAssignment.max_marks,
       grade_points: gp,
-      feedback: input.notes,
+      feedback: input.feedback,
       graded_by: profile.id,
       graded_at: new Date().toISOString(),
     }, { onConflict: 'course_id,student_id,assignment_id' });
 
     setSavingGrades(s => ({ ...s, [submission.student_id]: false }));
-    toast.success(`Grade saved for ${(submission.student as any)?.name}`);
+    toast.success(`Graded ${(submission.student as any)?.name}`);
     openGrading(gradingAssignment);
   };
 
   const getDeadlineStatus = (a: Assignment) => {
-    if ((a.submission as any)?.status === 'submitted' || (a.submission as any)?.status === 'graded')
-      return { icon: <CheckCircle2 size={14} className="text-emerald-500" />, text: 'Submitted', color: 'text-emerald-500' };
+    const sub = (a as any).submission;
+    if (sub?.status === 'submitted' || sub?.status === 'graded')
+      return { icon: <CheckCircle2 size={14} className="text-emerald-500" />, text: sub.status === 'graded' ? 'Graded' : 'Submitted', color: 'text-emerald-500' };
     if (!a.due_date) return { icon: <FileText size={14} className="text-zinc-400" />, text: 'No deadline', color: 'text-zinc-400' };
     if (isOverdue(a.due_date)) return { icon: <AlertCircle size={14} className="text-red-500" />, text: 'Overdue', color: 'text-red-500' };
     const days = daysUntil(a.due_date);
@@ -153,7 +165,7 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
   };
 
   const typeColors: Record<string, string> = { assignment: 'info', quiz: 'warning', project: 'default', exam: 'danger' };
-  const submitted = assignments.filter(a => (a.submission as any)?.status === 'submitted' || (a.submission as any)?.status === 'graded');
+  const submitted = assignments.filter(a => (a as any).submission?.status === 'submitted' || (a as any).submission?.status === 'graded');
   const completionRate = assignments.length > 0 ? Math.round((submitted.length / assignments.length) * 100) : 0;
 
   return (
@@ -176,7 +188,7 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
         ) : (
           <div>
             <p className="font-semibold text-zinc-900 dark:text-white">{assignments.length} Assignments</p>
-            <p className="text-sm text-zinc-500">Click an assignment to grade submissions</p>
+            <p className="text-sm text-zinc-500">Click "Grade" to review submissions and assign marks</p>
           </div>
         )}
         {canCreate && <Button icon={<Plus size={16} />} size="sm" onClick={() => setShowForm(true)}>Add Assignment</Button>}
@@ -191,6 +203,7 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
           <AnimatePresence>
             {assignments.map((a, idx) => {
               const ds = getDeadlineStatus(a);
+              const sub = (a as any).submission;
               const isExpanded = expandedId === a.id && canCreate;
               return (
                 <motion.div key={a.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -198,45 +211,50 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
                   <Card className="overflow-hidden">
                     <div className="p-4">
                       <div className="flex items-start gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                          (a.submission as any)?.status === 'graded' ? 'bg-emerald-50 dark:bg-emerald-500/10' :
-                          (a.submission as any)?.status === 'submitted' ? 'bg-blue-50 dark:bg-blue-500/10' :
-                          'bg-zinc-100 dark:bg-zinc-800'}`}>
-                          {(a.submission as any)?.status === 'graded' ? <Award size={18} className="text-emerald-500" /> :
-                           (a.submission as any)?.status === 'submitted' ? <CheckCircle2 size={18} className="text-blue-500" /> :
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                          sub?.status === 'graded' ? 'bg-emerald-50 dark:bg-emerald-500/10' :
+                          sub?.status === 'submitted' ? 'bg-blue-50 dark:bg-blue-500/10' : 'bg-zinc-100 dark:bg-zinc-800'}`}>
+                          {sub?.status === 'graded' ? <Award size={18} className="text-emerald-500" /> :
+                           sub?.status === 'submitted' ? <CheckCircle2 size={18} className="text-blue-500" /> :
                            <FileText size={18} className="text-zinc-400" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <h4 className="font-semibold text-zinc-900 dark:text-white">{a.title}</h4>
                             <Badge variant={typeColors[a.type] as any} size="sm">{a.type}</Badge>
-                            {(a.submission as any)?.marks !== undefined && (
-                              <Badge variant="success" size="sm">
-                                {(a.submission as any).marks}/{a.max_marks}
-                              </Badge>
+                            {sub?.marks !== undefined && (
+                              <Badge variant="success" size="sm">{sub.marks}/{a.max_marks}</Badge>
                             )}
                           </div>
                           {a.description && <p className="text-xs text-zinc-500 mb-2 line-clamp-2">{a.description}</p>}
                           <div className={`flex items-center gap-1.5 text-xs font-medium ${ds.color}`}>
-                            {ds.icon}
-                            <span>{ds.text}</span>
+                            {ds.icon}<span>{ds.text}</span>
                             <span className="text-zinc-300 dark:text-zinc-600 mx-1">·</span>
                             <span className="text-zinc-400">{a.max_marks} marks</span>
                           </div>
+                          {isStudent && sub?.submission_url && (
+                            <a href={sub.submission_url} target="_blank" rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-400">
+                              <ExternalLink size={11} /> View submitted doc
+                            </a>
+                          )}
+                          {isStudent && sub?.feedback && (
+                            <p className="mt-1 text-xs text-zinc-500 italic">Feedback: {sub.feedback}</p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          {isStudent && (!(a.submission as any) || (a.submission as any).status === 'pending') && (
-                            <Button size="sm" variant="outline" onClick={() => markComplete(a.id)}>Submit</Button>
+                          {isStudent && (!sub || sub.status === 'pending') && (
+                            <Button size="sm" variant="outline" icon={<Upload size={13} />}
+                              onClick={() => { setSubmitTarget(a); setSubmitUrl(''); }}>
+                              Submit
+                            </Button>
                           )}
                           {canCreate && (
                             <button
-                              onClick={() => {
-                                if (isExpanded) { setExpandedId(null); } else { setExpandedId(a.id); openGrading(a); }
-                              }}
+                              onClick={() => isExpanded ? setExpandedId(null) : openGrading(a)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                             >
-                              <Award size={13} />
-                              Grade
+                              <Award size={13} /> Grade
                               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                             </button>
                           )}
@@ -246,56 +264,65 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
 
                     <AnimatePresence>
                       {isExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden border-t border-zinc-100 dark:border-zinc-800"
-                        >
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                          className="overflow-hidden border-t border-zinc-100 dark:border-zinc-800">
                           <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50">
                             <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">
                               Submissions ({submissions.length})
                             </p>
                             {loadingSubmissions ? (
-                              <div className="space-y-2">
-                                {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}
-                              </div>
+                              <div className="space-y-2">{[1,2,3].map(i=><Skeleton key={i} className="h-16 rounded-xl"/>)}</div>
                             ) : submissions.length === 0 ? (
                               <p className="text-sm text-zinc-400 text-center py-3">No submissions yet</p>
                             ) : (
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {submissions.map(s => (
-                                  <div key={s.id} className="flex items-center gap-3 p-3 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700">
-                                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs flex-shrink-0">
-                                      {(s.student as any)?.name?.[0] || '?'}
+                                  <div key={s.id} className="p-3 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700">
+                                    <div className="flex items-center gap-3 mb-2">
+                                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs flex-shrink-0">
+                                        {(s.student as any)?.name?.[0] || '?'}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-zinc-900 dark:text-white">{(s.student as any)?.name || 'Student'}</p>
+                                        <p className="text-xs text-zinc-400">{(s.student as any)?.student_id} · {s.submitted_at ? formatDate(s.submitted_at) : 'Not yet submitted'}</p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant={s.status === 'graded' ? 'success' : s.status === 'submitted' ? 'info' : 'default'} size="sm">
+                                          {s.status}
+                                        </Badge>
+                                        {s.status === 'graded' && s.marks !== undefined && (
+                                          <Badge variant="success" size="sm">{s.marks}/{a.max_marks}</Badge>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{(s.student as any)?.name || 'Student'}</p>
-                                      <p className="text-xs text-zinc-400">{(s.student as any)?.student_id} · {s.submitted_at ? formatDate(s.submitted_at) : 'Not submitted'}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max={a.max_marks}
-                                        value={gradeInputs[s.student_id]?.marks ?? ''}
-                                        onChange={e => setGradeInputs(g => ({ ...g, [s.student_id]: { ...g[s.student_id], marks: e.target.value } }))}
-                                        placeholder="Marks"
-                                        className="w-20 px-2 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                      />
-                                      <span className="text-xs text-zinc-400">/{a.max_marks}</span>
-                                      <button
-                                        onClick={() => saveGrade(s)}
-                                        disabled={savingGrades[s.student_id]}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                      >
-                                        {savingGrades[s.student_id] ? '...' : s.status === 'graded' ? 'Update' : 'Save'}
-                                      </button>
-                                      {s.status === 'graded' && (
-                                        <Badge variant="success" size="sm">{s.marks}/{a.max_marks}</Badge>
-                                      )}
-                                    </div>
+                                    {s.submission_url && (
+                                      <a href={s.submission_url} target="_blank" rel="noopener noreferrer"
+                                        className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-400 mb-2 w-fit">
+                                        <ExternalLink size={11} /> View submitted document
+                                      </a>
+                                    )}
+                                    {s.status === 'submitted' || s.status === 'graded' ? (
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <input type="number" min="0" max={a.max_marks}
+                                          value={gradeInputs[s.student_id]?.marks ?? ''}
+                                          onChange={e => setGradeInputs(g => ({ ...g, [s.student_id]: { ...g[s.student_id], marks: e.target.value } }))}
+                                          placeholder="Marks"
+                                          className="w-20 px-2 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                                        <span className="text-xs text-zinc-400">/{a.max_marks}</span>
+                                        <input type="text"
+                                          value={gradeInputs[s.student_id]?.feedback ?? ''}
+                                          onChange={e => setGradeInputs(g => ({ ...g, [s.student_id]: { ...g[s.student_id], feedback: e.target.value } }))}
+                                          placeholder="Feedback (optional)"
+                                          className="flex-1 px-2 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                                        <button onClick={() => saveGrade(s)} disabled={savingGrades[s.student_id]}
+                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                                          {savingGrades[s.student_id] ? '...' : 'Save'}
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-zinc-400 italic">Awaiting submission</p>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -312,6 +339,7 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
         </div>
       )}
 
+      {/* Create assignment modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Create Assignment">
         <form onSubmit={handleCreate} className="space-y-4">
           <Input label="Title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
@@ -321,12 +349,34 @@ export const CourseAssignments: React.FC<{ courseId: string }> = ({ courseId }) 
             <Input label="Max Marks" type="number" value={form.max_marks} onChange={e => setForm(f => ({ ...f, max_marks: e.target.value }))} />
           </div>
           <Select label="Type" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-            options={[{ value: 'assignment', label: 'Assignment' }, { value: 'quiz', label: 'Quiz' }, { value: 'project', label: 'Project' }, { value: 'exam', label: 'Exam' }]} />
+            options={[{value:'assignment',label:'Assignment'},{value:'quiz',label:'Quiz'},{value:'project',label:'Project'},{value:'exam',label:'Exam'}]} />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button type="submit" loading={saving} className="flex-1">Create</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Student submit modal */}
+      <Modal isOpen={!!submitTarget} onClose={() => setSubmitTarget(null)} title={`Submit: ${submitTarget?.title}`}>
+        <div className="space-y-4">
+          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-blue-700 dark:text-blue-400">
+              Upload your document to Google Drive, OneDrive, or any cloud storage and paste the shareable link below.
+            </p>
+          </div>
+          <Input
+            label="Document Link"
+            value={submitUrl}
+            onChange={e => setSubmitUrl(e.target.value)}
+            placeholder="https://drive.google.com/..."
+            icon={<ExternalLink size={14} />}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setSubmitTarget(null)}>Cancel</Button>
+            <Button loading={submitting} className="flex-1" onClick={handleStudentSubmit}>Submit Assignment</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
