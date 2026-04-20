@@ -71,6 +71,7 @@ export const Dashboard: React.FC = () => {
     return 'Good evening';
   };
 
+  const isSecurity = profile?.role === 'security';
   const priorityBadge: Record<string, string> = { low: 'success', medium: 'warning', high: 'danger', critical: 'danger' };
 
   return (
@@ -93,6 +94,13 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
+        ) : isSecurity ? (
+          <>
+            <StatCard label="Visitors Today" value={stats.issues} icon={<Users size={20} />} color="blue" delay={0} />
+            <StatCard label="Open Issues" value={stats.issues} icon={<AlertCircle size={20} />} color="rose" delay={0.05} />
+            <StatCard label="Upcoming Events" value={stats.events} icon={<Calendar size={20} />} color="emerald" delay={0.1} />
+            <StatCard label="Active Alerts" value={0} icon={<TrendingUp size={20} />} color="amber" delay={0.15} />
+          </>
         ) : (
           <>
             <StatCard label="My Courses" value={stats.courses} icon={<BookOpen size={20} />} color="blue" trend={12} delay={0} />
@@ -103,8 +111,8 @@ export const Dashboard: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 p-5">
+      <div className={`grid gap-6 ${isSecurity ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'}`}>
+        <Card className={`${isSecurity ? '' : 'lg:col-span-2'} p-5`}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-zinc-900 dark:text-white">Weekly Activity</h3>
             <Badge variant="info">This Week</Badge>
@@ -131,73 +139,77 @@ export const Dashboard: React.FC = () => {
           </ResponsiveContainer>
         </Card>
 
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-zinc-900 dark:text-white">Upcoming Deadlines</h3>
-            <button onClick={() => navigate('/courses')} className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1">
-              View all <ArrowRight size={12} />
-            </button>
-          </div>
-          {loading ? (
-            <div className="space-y-3">{Array.from({length: 3}).map((_,i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
-          ) : assignments.length === 0 ? (
-            <div className="py-6 text-center text-zinc-400 text-sm">No upcoming deadlines</div>
-          ) : (
-            <div className="space-y-2">
-              {assignments.slice(0, 4).map(a => (
-                <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                    <CheckSquare size={14} className="text-blue-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{a.title}</p>
-                    <p className="text-xs text-zinc-400">{a.due_date ? formatDate(a.due_date) : 'No deadline'}</p>
-                  </div>
-                  <Badge variant={a.type === 'exam' ? 'danger' : 'info'} size="sm">{a.type}</Badge>
-                </div>
-              ))}
+        {!isSecurity && (
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-zinc-900 dark:text-white">Upcoming Deadlines</h3>
+              <button onClick={() => navigate('/courses')} className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1">
+                View all <ArrowRight size={12} />
+              </button>
             </div>
-          )}
-        </Card>
+            {loading ? (
+              <div className="space-y-3">{Array.from({length: 3}).map((_,i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+            ) : assignments.length === 0 ? (
+              <div className="py-6 text-center text-zinc-400 text-sm">No upcoming deadlines</div>
+            ) : (
+              <div className="space-y-2">
+                {assignments.slice(0, 4).map(a => (
+                  <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                      <CheckSquare size={14} className="text-blue-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{a.title}</p>
+                      <p className="text-xs text-zinc-400">{a.due_date ? formatDate(a.due_date) : 'No deadline'}</p>
+                    </div>
+                    <Badge variant={a.type === 'exam' ? 'danger' : 'info'} size="sm">{a.type}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-zinc-900 dark:text-white">My Courses</h3>
-            <button onClick={() => navigate('/courses')} className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1">
-              View all <ArrowRight size={12} />
-            </button>
-          </div>
-          {loading ? (
-            <div className="space-y-3">{Array.from({length: 3}).map((_,i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
-          ) : courses.length === 0 ? (
-            <div className="py-6 text-center text-zinc-400 text-sm">No courses enrolled</div>
-          ) : (
-            <div className="space-y-2">
-              {courses.map(course => (
-                <motion.div
-                  key={course.id}
-                  whileHover={{ x: 2 }}
-                  onClick={() => navigate(`/courses/${course.id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                    style={{ backgroundColor: course.color || '#3B82F6' }}>
-                    {course.code?.substring(0, 2)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{course.name}</p>
-                    <p className="text-xs text-zinc-400">{(course as any).faculty?.name || 'Faculty'} · {course.credits} credits</p>
-                  </div>
-                  <ArrowRight size={14} className="text-zinc-400" />
-                </motion.div>
-              ))}
+        {!isSecurity && (
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-zinc-900 dark:text-white">My Courses</h3>
+              <button onClick={() => navigate('/courses')} className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1">
+                View all <ArrowRight size={12} />
+              </button>
             </div>
-          )}
-        </Card>
+            {loading ? (
+              <div className="space-y-3">{Array.from({length: 3}).map((_,i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+            ) : courses.length === 0 ? (
+              <div className="py-6 text-center text-zinc-400 text-sm">No courses enrolled</div>
+            ) : (
+              <div className="space-y-2">
+                {courses.map(course => (
+                  <motion.div
+                    key={course.id}
+                    whileHover={{ x: 2 }}
+                    onClick={() => navigate(`/courses/${course.id}`)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                      style={{ backgroundColor: course.color || '#3B82F6' }}>
+                      {course.code?.substring(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{course.name}</p>
+                      <p className="text-xs text-zinc-400">{(course as any).faculty?.name || 'Faculty'} · {course.credits} credits</p>
+                    </div>
+                    <ArrowRight size={14} className="text-zinc-400" />
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
-        <Card className="p-5">
+        <Card className={`p-5 ${isSecurity ? 'lg:col-span-2' : ''}`}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-zinc-900 dark:text-white">Recent Issues</h3>
             <button onClick={() => navigate('/issues')} className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1">
